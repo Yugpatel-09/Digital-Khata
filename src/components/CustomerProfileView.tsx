@@ -91,14 +91,17 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
     setTimeout(() => setCopiedReminder(false), 3000);
   };
 
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     try {
       setIsExportingPDF(true);
-      generateCustomerStatementPDF(customer, transactions || [], 'Digital Khata');
-      setTimeout(() => setIsExportingPDF(false), 800);
+      const res = await generateCustomerStatementPDF(customer, transactions || [], 'Digital Khata');
+      if (!res.success && res.message) {
+        alert(res.message);
+      }
     } catch (err) {
       console.error('Failed to generate PDF statement', err);
       alert('Failed to generate PDF statement. Please try again.');
+    } finally {
       setIsExportingPDF(false);
     }
   };
@@ -140,9 +143,9 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
     .toUpperCase();
 
   return (
-    <div className="w-full min-h-screen bg-black text-white flex flex-col selection:bg-emerald-500/30 selection:text-white pb-24">
-      {/* Top Header */}
-      <header className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-[460px] z-50 bg-black/95 backdrop-blur-xl border-b border-[#27272a] pt-safe">
+    <div className="w-full min-h-screen bg-black text-white flex flex-col selection:bg-emerald-500/30 selection:text-white">
+      {/* Top Header - Sticky so it adapts dynamically to safe-area notch */}
+      <header className="sticky top-0 z-30 w-full bg-black/95 backdrop-blur-xl border-b border-[#27272a] pt-safe shadow-md">
         <div className="h-16 px-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5 min-w-0">
             <button
@@ -181,11 +184,11 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
             <button
               onClick={handleExportPDF}
               disabled={isExportingPDF}
-              className="px-2.5 py-1 rounded-full bg-[#18181b] border border-[#27272a] hover:border-emerald-500/50 flex items-center gap-1 text-zinc-200 hover:text-white transition-all text-xs font-semibold cursor-pointer active:scale-95 disabled:opacity-50"
+              className="px-2.5 py-1 rounded-full bg-[#18181b] border border-[#27272a] hover:border-emerald-500/50 flex items-center gap-1 text-zinc-200 hover:text-white transition-all text-xs font-semibold cursor-pointer active:scale-95 disabled:opacity-50 shadow-sm"
               title="Export Full Ledger Data as PDF"
             >
               <span className="material-symbols-outlined text-[15px] text-emerald-400">picture_as_pdf</span>
-              <span>{isExportingPDF ? '...' : 'PDF'}</span>
+              <span>{isExportingPDF ? 'Exporting...' : 'PDF'}</span>
             </button>
 
             {customer.phone && (
@@ -211,7 +214,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
       </header>
 
       {/* Main Profile Body */}
-      <main className="flex-1 w-full pt-18 pb-4 px-4">
+      <main className="flex-1 w-full px-4 pt-3 pb-28 space-y-3">
         {/* Customer Outstanding Balance Card */}
         <div className="p-4 rounded-2xl bg-[#111318] border border-[#27272a] text-white shadow-xl relative overflow-hidden mb-3">
           <div className="flex flex-col justify-between gap-3">

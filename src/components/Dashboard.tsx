@@ -1,6 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { db, type Customer, type Transaction, type TransactionType } from '../db';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { Capacitor } from '@capacitor/core';
+import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
 
 interface DashboardProps {
   merchantId: string;
@@ -147,7 +150,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     });
   }, [customers, searchQuery]);
 
-  const handleDownloadDaySheet = () => {
+  const handleDownloadDaySheet = async () => {
     const backupData = {
       store: 'Digital Khata',
       merchantId,
@@ -158,13 +161,35 @@ export const Dashboard: React.FC<DashboardProps> = ({
       customers,
       transactions
     };
-    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Khata_Backup_${todayStr}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const jsonStr = JSON.stringify(backupData, null, 2);
+    const fileName = `Khata_Backup_${todayStr}.json`;
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const savedFile = await Filesystem.writeFile({
+          path: fileName,
+          data: jsonStr,
+          directory: Directory.Cache,
+          encoding: Encoding.UTF8
+        });
+        await Share.share({
+          title: 'Digital Khata Backup',
+          text: 'Digital Khata JSON Backup Archive',
+          url: savedFile.uri,
+          dialogTitle: 'Save or Share Backup'
+        });
+      } catch (err) {
+        console.error('Failed to export native backup', err);
+      }
+    } else {
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
   };
 
   const getInitials = (name: string) => {
@@ -178,8 +203,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   return (
     <div className="w-full min-h-screen bg-black text-white flex flex-col selection:bg-emerald-500/30 selection:text-white">
-      {/* Top Fixed Header */}
-      <header className="fixed top-0 left-1/2 -translate-x-1/2 w-full max-w-[460px] z-50 bg-black/95 backdrop-blur-xl border-b border-[#27272a] pt-safe">
+      {/* Top Header - Sticky so it naturally shifts down for Android notch / safe area */}
+      <header className="sticky top-0 z-30 w-full bg-black/95 backdrop-blur-xl border-b border-[#27272a] pt-safe shadow-md">
         <div className="h-16 px-4 flex items-center justify-between">
           {/* Store Branding */}
           <div className="flex items-center gap-2.5 min-w-0">
@@ -274,7 +299,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </header>
 
       {/* Main Container */}
-      <main className="flex-1 w-full pt-18 pb-36 px-4">
+      <main className="flex-1 w-full px-4 pt-3 pb-36">
         <div className="flex flex-col w-full text-zinc-100">
           
           {/* Sub-Header: Date / Quick Add */}
@@ -916,7 +941,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </main>
 
       {/* Fixed Bottom Quick Action Bar (₹ GAVE / ₹ GOT) */}
-      <div className="fixed bottom-16 left-1/2 -translate-x-1/2 w-full max-w-[460px] z-40 bg-black/90 backdrop-blur-md border-t border-[#27272a] py-2 px-4">
+      <div className="fixed bottom-[calc(4.25rem+env(safe-area-inset-bottom,0px))] left-1/2 -translate-x-1/2 w-full max-w-[460px] z-40 bg-black/95 backdrop-blur-xl border-t border-[#27272a]/80 py-2.5 px-4 shadow-[0_-4px_20px_rgba(0,0,0,0.6)]">
         <div className="flex items-center gap-2.5">
           <button
             onClick={() => onOpenTransactionModal('GAVE')}
@@ -938,7 +963,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       </div>
 
       {/* Fixed Bottom Tab Navigation Bar */}
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[460px] z-50 pb-safe bg-[#09090b] border-t border-[#27272a] shadow-[0_-1px_12px_rgba(0,0,0,0.6)]">
+      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[460px] z-50 pb-safe bg-[#09090b] border-t border-[#27272a] shadow-[0_-1px_16px_rgba(0,0,0,0.8)]">
         <div className="flex justify-around items-center h-16 px-2">
           <button
             onClick={() => setActiveNavTab('daily-ledger')}
