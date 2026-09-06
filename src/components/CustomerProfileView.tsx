@@ -1,10 +1,18 @@
 import React, { useState } from 'react';
-import { db, type Customer, type Transaction, type TransactionType } from '../db';
+import {
+  db,
+  addTransactionSynced,
+  deleteTransactionSynced,
+  type Customer,
+  type Transaction,
+  type TransactionType
+} from '../db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { generateCustomerStatementPDF } from '../utils/pdfGenerator';
 
 interface CustomerProfileViewProps {
   customerId: number;
+  merchantId: string;
   onBack: () => void;
   onOpenTransactionModal: (type: TransactionType, customerId: number) => void;
   onEditCustomer: (customer: Customer) => void;
@@ -13,6 +21,7 @@ interface CustomerProfileViewProps {
 
 export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
   customerId,
+  merchantId,
   onBack,
   onOpenTransactionModal,
   onEditCustomer,
@@ -111,7 +120,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
   const handleDeleteTransaction = async (id?: number) => {
     if (!id) return;
     if (window.confirm('Delete this transaction record?')) {
-      await db.transactions.delete(id);
+      await deleteTransactionSynced(merchantId, id);
     }
   };
 
@@ -123,7 +132,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
     
     if (window.confirm(confirmText)) {
       const now = new Date();
-      await db.transactions.add({
+      await addTransactionSynced(merchantId, {
         customerId,
         type: netBalance > 0 ? 'GOT' : 'GAVE',
         amount: Math.abs(netBalance),

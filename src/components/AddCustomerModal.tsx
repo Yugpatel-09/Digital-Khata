@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { db, type Customer } from '../db';
+import { addCustomerSynced, updateCustomerSynced, type Customer } from '../db';
 
 interface AddCustomerModalProps {
   isOpen: boolean;
+  merchantId: string;
   onClose: () => void;
   onSuccess: (newCustomerId: number) => void;
   initialData?: Customer | null;
@@ -10,6 +11,7 @@ interface AddCustomerModalProps {
 
 export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
   isOpen,
+  merchantId,
   onClose,
   onSuccess,
   initialData
@@ -30,7 +32,7 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
     try {
       const now = new Date().toISOString();
       if (initialData?.id) {
-        await db.customers.update(initialData.id, {
+        await updateCustomerSynced(merchantId, initialData.id, {
           name: name.trim(),
           phone: phone.trim(),
           address: address.trim(),
@@ -39,7 +41,7 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
         });
         onSuccess(initialData.id);
       } else {
-        const id = await db.customers.add({
+        const id = await addCustomerSynced(merchantId, {
           name: name.trim(),
           phone: phone.trim() || '+91 ',
           address: address.trim(),
@@ -47,7 +49,7 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
           createdAt: now,
           updatedAt: now
         });
-        onSuccess(id as number);
+        onSuccess(id);
       }
       onClose();
     } catch (err) {

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { db, type Customer, type Transaction, type TransactionType } from '../db';
+import { db, restoreDatabaseFromJSON, type Customer, type Transaction, type TransactionType } from '../db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
@@ -7,6 +7,7 @@ import { Share } from '@capacitor/share';
 
 interface DashboardProps {
   merchantId: string;
+  syncStatus?: 'connected' | 'syncing' | 'offline';
   onLogout: () => void;
   onSelectCustomer: (customerId: number) => void;
   onOpenAddCustomer: () => void;
@@ -16,6 +17,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({
   merchantId,
+  syncStatus = 'connected',
   onLogout,
   onSelectCustomer,
   onOpenAddCustomer,
@@ -227,8 +229,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <span className="material-symbols-outlined text-zinc-400 text-[18px]">expand_more</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <span className="text-[11px] text-zinc-400 font-medium">Sync Active</span>
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      syncStatus === 'connected'
+                        ? 'bg-emerald-400 animate-pulse'
+                        : syncStatus === 'syncing'
+                        ? 'bg-amber-400 animate-spin'
+                        : 'bg-zinc-500'
+                    }`}
+                  ></span>
+                  <span className="text-[11px] text-zinc-400 font-medium">
+                    {syncStatus === 'connected'
+                      ? 'Cloud Synced'
+                      : syncStatus === 'syncing'
+                      ? 'Syncing...'
+                      : 'Offline Mode'}
+                  </span>
                 </div>
               </div>
             </button>
@@ -924,13 +940,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                               return;
                             }
                             if (window.confirm(`Restore backup with ${json.customers.length} parties and ${json.transactions.length} transactions?`)) {
-                              await db.transaction('rw', db.customers, db.transactions, async () => {
-                                await db.customers.clear();
-                                await db.transactions.clear();
-                                for (const c of json.customers) await db.customers.add(c);
-                                for (const t of json.transactions) await db.transactions.add(t);
-                              });
-                              alert('Backup restored successfully!');
+                              await restoreDatabaseFromJSON(merchantId, json);
+                              alert('Backup restored successfully and synced to cloud!');
                             }
                           } catch (err) {
                             console.error('Failed to restore backup', err);

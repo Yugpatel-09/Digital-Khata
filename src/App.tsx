@@ -5,6 +5,7 @@ import { CustomerProfileView } from './components/CustomerProfileView';
 import { AddCustomerModal } from './components/AddCustomerModal';
 import { TransactionModal } from './components/TransactionModal';
 import { db, seedInitialDataIfNeeded, type Customer, type Transaction, type TransactionType } from './db';
+import { startRealtimeCloudSync } from './db/firebase';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 export function App() {
@@ -12,6 +13,7 @@ export function App() {
     return localStorage.getItem('khata_merchant_id');
   });
 
+  const [syncStatus, setSyncStatus] = useState<'connected' | 'syncing' | 'offline'>('connected');
   const [selectedCustomerId, setSelectedCustomerId] = useState<number | null>(null);
 
   // Modals state
@@ -26,6 +28,16 @@ export function App() {
   useEffect(() => {
     seedInitialDataIfNeeded();
   }, []);
+
+  // Multi-device real-time cloud synchronization
+  useEffect(() => {
+    if (merchantId) {
+      const cleanup = startRealtimeCloudSync(merchantId, (status) => {
+        setSyncStatus(status);
+      });
+      return cleanup;
+    }
+  }, [merchantId]);
 
   const customers = useLiveQuery(() => db.customers.toArray()) || [];
 
@@ -73,6 +85,7 @@ export function App() {
         ) : selectedCustomerId !== null ? (
           <CustomerProfileView
             customerId={selectedCustomerId}
+            merchantId={merchantId}
             onBack={() => setSelectedCustomerId(null)}
             onOpenTransactionModal={handleOpenTransactionModal}
             onEditCustomer={handleEditCustomer}
@@ -81,6 +94,7 @@ export function App() {
         ) : (
           <Dashboard
             merchantId={merchantId}
+            syncStatus={syncStatus}
             onLogout={handleLogout}
             onSelectCustomer={(id) => setSelectedCustomerId(id)}
             onOpenAddCustomer={handleOpenAddCustomer}
@@ -90,37 +104,43 @@ export function App() {
         )}
 
         {/* Add / Edit Customer Modal */}
-        <AddCustomerModal
-          isOpen={isCustomerModalOpen}
-          initialData={customerToEdit}
-          onClose={() => {
-            setIsCustomerModalOpen(false);
-            setCustomerToEdit(null);
-          }}
-          onSuccess={(id) => {
-            if (!selectedCustomerId && !customerToEdit) {
-              setSelectedCustomerId(id);
-            }
-          }}
-        />
+        {merchantId && (
+          <AddCustomerModal
+            isOpen={isCustomerModalOpen}
+            merchantId={merchantId}
+            initialData={customerToEdit}
+            onClose={() => {
+              setIsCustomerModalOpen(false);
+              setCustomerToEdit(null);
+            }}
+            onSuccess={(id) => {
+              if (!selectedCustomerId && !customerToEdit) {
+                setSelectedCustomerId(id);
+              }
+            }}
+          />
+        )}
 
         {/* Record / Edit Transaction Modal (Gave / Got) */}
-        <TransactionModal
-          isOpen={isTransactionModalOpen}
-          defaultType={transactionModalType}
-          defaultCustomerId={transactionModalCustomerId}
-          initialData={transactionToEdit}
-          customers={customers}
-          onOpenAddCustomer={() => {
-            setIsTransactionModalOpen(false);
-            setIsCustomerModalOpen(true);
-          }}
-          onClose={() => {
-            setIsTransactionModalOpen(false);
-            setTransactionToEdit(null);
-          }}
-          onSuccess={() => {}}
-        />
+        {merchantId && (
+          <TransactionModal
+            isOpen={isTransactionModalOpen}
+            merchantId={merchantId}
+            defaultType={transactionModalType}
+            defaultCustomerId={transactionModalCustomerId}
+            initialData={transactionToEdit}
+            customers={customers}
+            onOpenAddCustomer={() => {
+              setIsTransactionModalOpen(false);
+              setIsCustomerModalOpen(true);
+            }}
+            onClose={() => {
+              setIsTransactionModalOpen(false);
+              setTransactionToEdit(null);
+            }}
+            onSuccess={() => {}}
+          />
+        )}
       </div>
     </div>
   );

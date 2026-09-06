@@ -1,8 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { db, type Customer, type Transaction, type TransactionType } from '../db';
+import {
+  addTransactionSynced,
+  updateTransactionSynced,
+  updateCustomerSynced,
+  type Customer,
+  type Transaction,
+  type TransactionType
+} from '../db';
 
 interface TransactionModalProps {
   isOpen: boolean;
+  merchantId: string;
   onClose: () => void;
   defaultType?: TransactionType;
   defaultCustomerId?: number | null;
@@ -14,6 +22,7 @@ interface TransactionModalProps {
 
 export const TransactionModal: React.FC<TransactionModalProps> = ({
   isOpen,
+  merchantId,
   onClose,
   defaultType = 'GAVE',
   defaultCustomerId = null,
@@ -92,8 +101,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       const statusNote = isGave ? 'Due to you' : (paymentMode === 'UPI' ? 'Verified UPI' : 'Cash in drawer');
 
       if (initialData?.id) {
-        // UPDATE existing transaction
-        await db.transactions.update(initialData.id, {
+        // UPDATE existing transaction synced with cloud
+        await updateTransactionSynced(merchantId, initialData.id, {
           customerId: Number(customerId),
           type,
           amount: numAmount,
@@ -104,9 +113,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           statusNote
         });
       } else {
-        // CREATE new transaction
+        // CREATE new transaction synced with cloud
         const createdAt = new Date().toISOString();
-        await db.transactions.add({
+        await addTransactionSynced(merchantId, {
           customerId: Number(customerId),
           type,
           amount: numAmount,
@@ -119,8 +128,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         });
       }
 
-      // Update customer updated timestamp
-      await db.customers.update(Number(customerId), {
+      // Update customer updated timestamp synced with cloud
+      await updateCustomerSynced(merchantId, Number(customerId), {
         updatedAt: new Date().toISOString()
       });
 
