@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { db, type Customer, type TransactionType } from '../db';
+import { db, type Customer, type Transaction, type TransactionType } from '../db';
 
 interface TransactionModalProps {
   isOpen: boolean;
   onClose: () => void;
   defaultType?: TransactionType;
   defaultCustomerId?: number | null;
+  initialData?: Transaction | null;
   customers: Customer[];
   onOpenAddCustomer: () => void;
   onSuccess: () => void;
@@ -16,6 +17,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   onClose,
   defaultType = 'GAVE',
   defaultCustomerId = null,
+  initialData = null,
   customers,
   onOpenAddCustomer,
   onSuccess
@@ -31,22 +33,52 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
   useEffect(() => {
     if (isOpen) {
-      setType(defaultType);
-      setCustomerId(defaultCustomerId || (customers[0]?.id ?? ''));
-      setAmount('');
-      const now = new Date();
-      setDate(now.toISOString().split('T')[0]);
-      setTime(now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
-      setPaymentMode('UPI');
-      setNotes('');
+      if (initialData) {
+        setType(initialData.type);
+        setCustomerId(initialData.customerId);
+        setAmount(initialData.amount.toString());
+        setDate(initialData.date);
+        setTime(initialData.time || '');
+        setPaymentMode((initialData.paymentMode as any) || 'UPI');
+        setNotes(initialData.notes || '');
+      } else {
+        setType(defaultType);
+        setCustomerId(defaultCustomerId || (customers[0]?.id ?? ''));
+        setAmount('');
+        const now = new Date();
+        setDate(now.toISOString().split('T')[0]);
+        setTime(now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
+        setPaymentMode('UPI');
+        setNotes('');
+      }
     }
-  }, [isOpen, defaultType, defaultCustomerId, customers]);
+  }, [isOpen, defaultType, defaultCustomerId, initialData, customers]);
 
   if (!isOpen) return null;
 
   const handleAmountChip = (addVal: number) => {
     const current = parseFloat(amount) || 0;
     setAmount((current + addVal).toString());
+  };
+
+  const getDayLabel = (dStr: string) => {
+    if (!dStr) return '';
+    try {
+      const d = new Date(dStr + 'T00:00:00');
+      const today = new Date().toISOString().split('T')[0];
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yestStr = yesterday.toISOString().split('T')[0];
+
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+      const formatted = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+
+      if (dStr === today) return `Today (${dayName})`;
+      if (dStr === yestStr) return `Yesterday (${dayName})`;
+      return `${dayName}, ${formatted}`;
+    } catch {
+      return '';
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,20 +89,35 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     setIsSubmitting(true);
     try {
       const now = new Date();
-      const createdAt = new Date().toISOString();
       const statusNote = isGave ? 'Due to you' : (paymentMode === 'UPI' ? 'Verified UPI' : 'Cash in drawer');
 
-      await db.transactions.add({
-        customerId: Number(customerId),
-        type,
-        amount: numAmount,
-        date,
-        time: time || now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        paymentMode,
-        notes: notes.trim(),
-        statusNote,
-        createdAt
-      });
+      if (initialData?.id) {
+        // UPDATE existing transaction
+        await db.transactions.update(initialData.id, {
+          customerId: Number(customerId),
+          type,
+          amount: numAmount,
+          date,
+          time: time || now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          paymentMode,
+          notes: notes.trim(),
+          statusNote
+        });
+      } else {
+        // CREATE new transaction
+        const createdAt = new Date().toISOString();
+        await db.transactions.add({
+          customerId: Number(customerId),
+          type,
+          amount: numAmount,
+          date,
+          time: time || now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
+          paymentMode,
+          notes: notes.trim(),
+          statusNote,
+          createdAt
+        });
+      }
 
       // Update customer updated timestamp
       await db.customers.update(Number(customerId), {
@@ -80,7 +127,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       onSuccess();
       onClose();
     } catch (err) {
-      console.error('Failed to add transaction', err);
+      console.error('Failed to save transaction', err);
+      alert('Failed to save transaction. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -93,31 +141,39 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       <div className="w-full max-w-md rounded-2xl p-5 border border-[#27272a] bg-[#111318] text-zinc-100 shadow-2xl relative">
         {/* Header with Type Selector */}
         <div className="flex items-center justify-between pb-3 border-b border-[#27272a] mb-4">
-          <div className="flex gap-1 p-1 bg-black/60 rounded-xl border border-[#27272a]">
-            <button
-              type="button"
-              onClick={() => setType('GAVE')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                isGave
-                  ? 'bg-red-600 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[16px]">arrow_upward</span>
-              <span>You Gave (Udhaar)</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setType('GOT')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
-                !isGave
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-zinc-400 hover:text-zinc-200'
-              }`}
-            >
-              <span className="material-symbols-outlined text-[16px]">arrow_downward</span>
-              <span>You Got (Jama)</span>
-            </button>
+          <div className="flex items-center gap-2">
+            {initialData && (
+              <span className="text-xs font-bold text-amber-400 bg-amber-950/60 border border-amber-800/40 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">edit</span>
+                <span>Edit</span>
+              </span>
+            )}
+            <div className="flex gap-1 p-1 bg-black/60 rounded-xl border border-[#27272a]">
+              <button
+                type="button"
+                onClick={() => setType('GAVE')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                  isGave
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[16px]">arrow_upward</span>
+                <span>You Gave</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setType('GOT')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all cursor-pointer ${
+                  !isGave
+                    ? 'bg-emerald-600 text-white shadow-sm'
+                    : 'text-zinc-400 hover:text-zinc-200'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[16px]">arrow_downward</span>
+                <span>You Got</span>
+              </button>
+            </div>
           </div>
 
           <button
@@ -136,7 +192,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               : 'bg-emerald-950/20 border-emerald-900/40 text-emerald-300'
           }`}>
             <label className="block text-[10.5px] uppercase tracking-wider font-semibold opacity-80 mb-1">
-              {isGave ? "Amount Given (You'll Get back)" : "Amount Received (Payment/Settled)"}
+              {isGave ? "Amount Given (Udhaar / Debit)" : "Amount Received (Jama / Credit)"}
             </label>
             <div className="flex items-center gap-2">
               <span className="text-2xl font-bold font-sans">₹</span>
@@ -174,16 +230,18 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               <label className="block text-[11px] font-medium text-zinc-300">
                 Customer Profile <span className="text-red-400">*</span>
               </label>
-              <button
-                type="button"
-                onClick={() => {
-                  onOpenAddCustomer();
-                }}
-                className="text-[11px] text-emerald-400 hover:underline font-semibold flex items-center gap-0.5 cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[13px]">add</span>
-                <span>New Profile</span>
-              </button>
+              {!initialData && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenAddCustomer();
+                  }}
+                  className="text-[11px] text-emerald-400 hover:underline font-semibold flex items-center gap-0.5 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[13px]">add</span>
+                  <span>New Profile</span>
+                </button>
+              )}
             </div>
             <div className="relative flex items-center">
               <span className="material-symbols-outlined absolute left-3 text-[17px] text-zinc-500 pointer-events-none">
@@ -205,10 +263,17 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           </div>
 
-          {/* Date & Time */}
+          {/* Date & Time with Day Helper */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-[11px] font-medium text-zinc-300 mb-1">Date</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[11px] font-medium text-zinc-300">Date</label>
+                {date && (
+                  <span className="text-[10px] text-emerald-400 font-semibold truncate max-w-[100px]">
+                    {getDayLabel(date)}
+                  </span>
+                )}
+              </div>
               <input
                 type="date"
                 required
@@ -250,14 +315,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             </div>
           </div>
 
-          {/* Description */}
+          {/* Description / Notes */}
           <div>
             <label className="block text-[11px] font-medium text-zinc-300 mb-1">
               Description / Items / Notes
             </label>
             <input
               type="text"
-              placeholder="e.g. Kirana Supplies • Inv #1082"
+              placeholder="e.g. 5 Lakh Udhaar • Cash Loan"
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="w-full py-2 px-3 rounded-xl bg-black/60 border border-[#27272a] text-zinc-100 placeholder-zinc-500 text-xs focus:outline-none focus:border-zinc-500"
@@ -283,7 +348,13 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
               }`}
             >
               <span className="material-symbols-outlined text-[16px]">save</span>
-              <span>{isGave ? 'Save Gave Entry (₹)' : 'Save Got Entry (₹)'}</span>
+              <span>
+                {initialData
+                  ? 'Update Entry (₹)'
+                  : isGave
+                  ? 'Save Gave Entry (₹)'
+                  : 'Save Got Entry (₹)'}
+              </span>
             </button>
           </div>
         </form>
@@ -291,3 +362,4 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     </div>
   );
 };
+

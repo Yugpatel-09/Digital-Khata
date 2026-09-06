@@ -11,6 +11,7 @@ interface DashboardProps {
   onSelectCustomer: (customerId: number) => void;
   onOpenAddCustomer: () => void;
   onOpenTransactionModal: (type: TransactionType, customerId?: number | null) => void;
+  onEditTransaction: (transaction: Transaction) => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -18,7 +19,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onLogout,
   onSelectCustomer,
   onOpenAddCustomer,
-  onOpenTransactionModal
+  onOpenTransactionModal,
+  onEditTransaction
 }) => {
   const [activeNavTab, setActiveNavTab] = useState<'daily-ledger' | 'customers' | 'reports' | 'settings'>('daily-ledger');
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'RECOVERY' | 'SETTLED' | 'PAYABLE'>('ALL');
@@ -695,18 +697,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                 </div>
                               </div>
 
-                              <div className="flex flex-col items-end flex-shrink-0 pl-2">
-                                <span
-                                  className={`text-sm font-bold font-sans tracking-tight ${
-                                    isGave ? 'text-red-400' : 'text-emerald-400'
-                                  }`}
+                              <div className="flex items-center gap-2 flex-shrink-0 pl-2">
+                                <div className="flex flex-col items-end">
+                                  <span
+                                    className={`text-sm font-bold font-sans tracking-tight ${
+                                      isGave ? 'text-red-400' : 'text-emerald-400'
+                                    }`}
+                                  >
+                                    {isGave ? '-₹ ' : '+₹ '}
+                                    {t.amount.toLocaleString('en-IN')}
+                                  </span>
+                                  <span className="text-[10px] text-zinc-500">
+                                    {isGave ? 'Udhaar given' : 'Payment received'}
+                                  </span>
+                                </div>
+
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onEditTransaction(t);
+                                  }}
+                                  className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                                  title="Edit Entry (Date, Time, Day, Amount)"
                                 >
-                                  {isGave ? '₹ ' : '+₹ '}
-                                  {t.amount.toLocaleString('en-IN')}
-                                </span>
-                                <span className="text-[10px] text-zinc-500">
-                                  {isGave ? 'Due to you' : 'Received'}
-                                </span>
+                                  <span className="material-symbols-outlined text-[15px]">edit</span>
+                                </button>
                               </div>
                             </div>
                           );

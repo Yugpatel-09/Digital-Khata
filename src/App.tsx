@@ -4,7 +4,7 @@ import { Dashboard } from './components/Dashboard';
 import { CustomerProfileView } from './components/CustomerProfileView';
 import { AddCustomerModal } from './components/AddCustomerModal';
 import { TransactionModal } from './components/TransactionModal';
-import { db, seedInitialDataIfNeeded, type Customer, type TransactionType } from './db';
+import { db, seedInitialDataIfNeeded, type Customer, type Transaction, type TransactionType } from './db';
 import { useLiveQuery } from 'dexie-react-hooks';
 
 export function App() {
@@ -21,6 +21,7 @@ export function App() {
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [transactionModalType, setTransactionModalType] = useState<TransactionType>('GAVE');
   const [transactionModalCustomerId, setTransactionModalCustomerId] = useState<number | null>(null);
+  const [transactionToEdit, setTransactionToEdit] = useState<Transaction | null>(null);
 
   useEffect(() => {
     seedInitialDataIfNeeded();
@@ -40,8 +41,16 @@ export function App() {
   };
 
   const handleOpenTransactionModal = (type: TransactionType, customerId?: number | null) => {
+    setTransactionToEdit(null);
     setTransactionModalType(type);
     setTransactionModalCustomerId(customerId ?? selectedCustomerId ?? null);
+    setIsTransactionModalOpen(true);
+  };
+
+  const handleEditTransaction = (txn: Transaction) => {
+    setTransactionToEdit(txn);
+    setTransactionModalType(txn.type);
+    setTransactionModalCustomerId(txn.customerId);
     setIsTransactionModalOpen(true);
   };
 
@@ -67,6 +76,7 @@ export function App() {
             onBack={() => setSelectedCustomerId(null)}
             onOpenTransactionModal={handleOpenTransactionModal}
             onEditCustomer={handleEditCustomer}
+            onEditTransaction={handleEditTransaction}
           />
         ) : (
           <Dashboard
@@ -75,6 +85,7 @@ export function App() {
             onSelectCustomer={(id) => setSelectedCustomerId(id)}
             onOpenAddCustomer={handleOpenAddCustomer}
             onOpenTransactionModal={handleOpenTransactionModal}
+            onEditTransaction={handleEditTransaction}
           />
         )}
 
@@ -93,17 +104,21 @@ export function App() {
           }}
         />
 
-        {/* Record Transaction Modal (Gave / Got) */}
+        {/* Record / Edit Transaction Modal (Gave / Got) */}
         <TransactionModal
           isOpen={isTransactionModalOpen}
           defaultType={transactionModalType}
           defaultCustomerId={transactionModalCustomerId}
+          initialData={transactionToEdit}
           customers={customers}
           onOpenAddCustomer={() => {
             setIsTransactionModalOpen(false);
             setIsCustomerModalOpen(true);
           }}
-          onClose={() => setIsTransactionModalOpen(false)}
+          onClose={() => {
+            setIsTransactionModalOpen(false);
+            setTransactionToEdit(null);
+          }}
           onSuccess={() => {}}
         />
       </div>

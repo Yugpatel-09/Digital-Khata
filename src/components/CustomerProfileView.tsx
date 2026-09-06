@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { db, type Customer, type TransactionType } from '../db';
+import { db, type Customer, type Transaction, type TransactionType } from '../db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { generateCustomerStatementPDF } from '../utils/pdfGenerator';
 
@@ -8,13 +8,15 @@ interface CustomerProfileViewProps {
   onBack: () => void;
   onOpenTransactionModal: (type: TransactionType, customerId: number) => void;
   onEditCustomer: (customer: Customer) => void;
+  onEditTransaction: (transaction: Transaction) => void;
 }
 
 export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
   customerId,
   onBack,
   onOpenTransactionModal,
-  onEditCustomer
+  onEditCustomer,
+  onEditTransaction
 }) => {
   const [filterType, setFilterType] = useState<'ALL' | 'GAVE' | 'GOT'>('ALL');
   const [copiedReminder, setCopiedReminder] = useState(false);
@@ -387,28 +389,38 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0 pl-2">
+                  <div className="flex items-center gap-1.5 shrink-0 pl-2">
                     <div className="text-right">
                       <span
                         className={`text-sm font-bold font-sans tracking-tight ${
                           isGave ? 'text-red-400' : 'text-emerald-400'
                         }`}
                       >
-                        {isGave ? '₹ ' : '+₹ '}
+                        {isGave ? '-₹ ' : '+₹ '}
                         {tx.amount.toLocaleString('en-IN')}
                       </span>
                       <p className="text-[10px] text-zinc-500">
-                        {isGave ? 'Due to you' : 'Received'}
+                        {isGave ? 'Udhaar given' : 'Received'}
                       </p>
                     </div>
 
-                    <button
-                      onClick={() => handleDeleteTransaction(tx.id)}
-                      className="opacity-0 group-hover:opacity-100 text-zinc-600 hover:text-red-400 p-1 transition-opacity cursor-pointer"
-                      title="Delete Entry"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">delete</span>
-                    </button>
+                    <div className="flex items-center gap-1 ml-1">
+                      <button
+                        onClick={() => onEditTransaction(tx)}
+                        className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+                        title="Edit Entry (Date, Time, Day, Amount)"
+                      >
+                        <span className="material-symbols-outlined text-[15px]">edit</span>
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteTransaction(tx.id)}
+                        className="w-7 h-7 rounded-lg bg-zinc-800 hover:bg-red-950/60 text-zinc-400 hover:text-red-400 flex items-center justify-center transition-colors cursor-pointer"
+                        title="Delete Entry"
+                      >
+                        <span className="material-symbols-outlined text-[15px]">delete</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               );
