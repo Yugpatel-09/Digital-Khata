@@ -826,7 +826,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             {cust.name}
                           </span>
                           <span className="text-[11px] text-[#a1a1aa] truncate mt-0.5">
-                            {cust.phone || 'No mobile'} {cust.address ? `• ${cust.address}` : ''}
+                            {cust.address || 'Account Active'}
                           </span>
                         </div>
                       </div>

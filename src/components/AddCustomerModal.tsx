@@ -17,7 +17,6 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
   initialData
 }) => {
   const [name, setName] = useState(initialData?.name || '');
-  const [phone, setPhone] = useState(initialData?.phone || '');
   const [address, setAddress] = useState(initialData?.address || '');
   const [notes, setNotes] = useState(initialData?.notes || '');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -34,7 +33,7 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
       if (initialData?.id) {
         await updateCustomerSynced(merchantId, initialData.id, {
           name: name.trim(),
-          phone: phone.trim(),
+          phone: initialData.phone || '',
           address: address.trim(),
           notes: notes.trim(),
           updatedAt: now
@@ -43,7 +42,7 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
       } else {
         const id = await addCustomerSynced(merchantId, {
           name: name.trim(),
-          phone: phone.trim() || '+91 ',
+          phone: '',
           address: address.trim(),
           notes: notes.trim(),
           createdAt: now,
@@ -101,24 +100,6 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
 
           <div>
             <label className="block text-[11px] font-medium text-zinc-300 mb-1">
-              Mobile Number (WhatsApp / SMS)
-            </label>
-            <div className="relative flex items-center">
-              <span className="material-symbols-outlined absolute left-3 text-[17px] text-zinc-500 pointer-events-none">
-                phone_iphone
-              </span>
-              <input
-                type="tel"
-                placeholder="e.g. +91 98250 12345"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="w-full py-2 pl-9 pr-3 rounded-xl bg-black/60 border border-[#27272a] text-zinc-100 placeholder-zinc-500 text-xs focus:outline-none focus:border-zinc-500"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-medium text-zinc-300 mb-1">
               Shop Location / Address (Optional)
             </label>
             <div className="relative flex items-center">
@@ -137,7 +118,7 @@ export const AddCustomerModal: React.FC<AddCustomerModalProps> = ({
 
           <div>
             <label className="block text-[11px] font-medium text-zinc-300 mb-1">
-              Business Note / Reference
+              Business Note / Reference (Optional)
             </label>
             <textarea
               rows={2}

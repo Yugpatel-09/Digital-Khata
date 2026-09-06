@@ -138,7 +138,7 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
         amount: Math.abs(netBalance),
         date: now.toISOString().split('T')[0],
         time: now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        paymentMode: 'UPI',
+        paymentMode: 'Cash',
         notes: 'Full balance settled',
         statusNote: 'Cleared in full',
         createdAt: now.toISOString()
@@ -183,9 +183,11 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
                     <span className="material-symbols-outlined text-[15px]">edit</span>
                   </button>
                 </div>
-                <p className="text-[11px] text-zinc-400 truncate max-w-[160px]">
-                  {customer.phone || 'No phone'}
-                </p>
+                {customer.address && (
+                  <p className="text-[11px] text-zinc-400 truncate max-w-[160px]">
+                    {customer.address}
+                  </p>
+                )}
               </div>
             </div>
           </div>
@@ -201,16 +203,6 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
               <span className="material-symbols-outlined text-[15px] text-emerald-400">picture_as_pdf</span>
               <span>{isExportingPDF ? 'Exporting...' : 'PDF'}</span>
             </button>
-
-            {customer.phone && (
-              <a
-                href={`tel:${customer.phone}`}
-                className="w-8 h-8 rounded-full bg-[#18181b] border border-[#27272a] flex items-center justify-center text-zinc-300 hover:text-emerald-400 transition-colors"
-                title="Call"
-              >
-                <span className="material-symbols-outlined text-[16px]">call</span>
-              </a>
-            )}
 
             <button
               onClick={handleCopyReminder}

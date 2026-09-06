@@ -36,7 +36,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const [amount, setAmount] = useState<string>('');
   const [date, setDate] = useState<string>('');
   const [time, setTime] = useState<string>('');
-  const [paymentMode, setPaymentMode] = useState<'Cash' | 'UPI' | 'Bank Transfer' | 'Cheque' | 'Other'>('UPI');
+  const [paymentMode, setPaymentMode] = useState<'Cash' | 'UPI' | 'Bank Transfer' | 'Cheque' | 'Other'>('Cash');
   const [notes, setNotes] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -48,7 +48,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         setAmount(initialData.amount.toString());
         setDate(initialData.date);
         setTime(initialData.time || '');
-        setPaymentMode((initialData.paymentMode as any) || 'UPI');
+        setPaymentMode((initialData.paymentMode as any) || 'Cash');
         setNotes(initialData.notes || '');
       } else {
         setType(defaultType);
@@ -57,7 +57,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         const now = new Date();
         setDate(now.toISOString().split('T')[0]);
         setTime(now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
-        setPaymentMode('UPI');
+        setPaymentMode('Cash');
         setNotes('');
       }
     }
@@ -307,7 +307,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
           <div>
             <label className="block text-[11px] font-medium text-zinc-300 mb-1">Payment Mode</label>
             <div className="grid grid-cols-4 gap-1.5">
-              {(['UPI', 'Cash', 'Bank Transfer', 'Cheque'] as const).map((mode) => (
+              {(['Cash', 'UPI', 'Bank Transfer', 'Cheque'] as const).map((mode) => (
                 <button
                   key={mode}
                   type="button"

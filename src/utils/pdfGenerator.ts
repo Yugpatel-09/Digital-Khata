@@ -116,10 +116,9 @@ export async function generateCustomerStatementPDF(
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(71, 85, 105);
-    doc.text(`Phone: ${customer.phone || 'N/A'}`, 18, 58);
-    doc.text(`Address: ${customer.address || 'N/A'}`, 18, 64);
+    doc.text(`Address: ${customer.address || 'Standard Account'}`, 18, 59);
     if (customer.notes) {
-      doc.text(`Note: ${customer.notes}`, 18, 69);
+      doc.text(`Note: ${customer.notes}`, 18, 66);
     }
 
     // Summary Card
