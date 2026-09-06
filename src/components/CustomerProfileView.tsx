@@ -223,23 +223,25 @@ export const CustomerProfileView: React.FC<CustomerProfileViewProps> = ({
                 Customer Balance Position
               </span>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-xl text-zinc-400 font-bold">₹</span>
-                <span className="text-3xl font-extrabold tracking-tight text-white font-sans">
+                <span className={`text-xl font-bold ${netBalance > 0 ? 'text-red-400' : netBalance < 0 ? 'text-emerald-400' : 'text-zinc-400'}`}>
+                  {netBalance > 0 ? '-₹' : netBalance < 0 ? '+₹' : '₹'}
+                </span>
+                <span className={`text-3xl font-extrabold tracking-tight font-sans ${netBalance > 0 ? 'text-red-400' : netBalance < 0 ? 'text-emerald-400' : 'text-white'}`}>
                   {Math.abs(netBalance).toLocaleString('en-IN')}
                 </span>
                 <span
-                  className={`text-xs px-2 py-0.5 rounded-full font-bold ml-1 ${
+                  className={`text-xs px-2.5 py-0.5 rounded-full font-bold ml-1 ${
                     netBalance > 0
-                      ? 'bg-emerald-950/80 border border-emerald-800/50 text-emerald-400'
-                      : netBalance < 0
                       ? 'bg-red-950/80 border border-red-800/50 text-red-400'
+                      : netBalance < 0
+                      ? 'bg-emerald-950/80 border border-emerald-800/50 text-emerald-400'
                       : 'bg-zinc-800 border border-[#27272a] text-zinc-400'
                   }`}
                 >
                   {netBalance > 0
-                    ? "You'll Get (देना बाकी)"
+                    ? 'GAVE (उधार दिया)'
                     : netBalance < 0
-                    ? "You'll Give (जमा / Advance)"
+                    ? 'GOT (जमा / Advance)'
                     : 'Account Settled (₹0)'}
                 </span>
               </div>

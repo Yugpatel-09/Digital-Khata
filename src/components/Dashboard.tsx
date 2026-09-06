@@ -38,46 +38,47 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return map;
   }, [customers]);
 
-  // Compute Net Balance per customer
+  // Compute Balance per customer
   const customerBalances = useMemo(() => {
-    const balances = new Map<number, { gave: number; got: number; net: number }>();
+    const balances = new Map<number, { gave: number; got: number; netGave: number }>();
     transactions.forEach((t) => {
-      const current = balances.get(t.customerId) || { gave: 0, got: 0, net: 0 };
+      const current = balances.get(t.customerId) || { gave: 0, got: 0, netGave: 0 };
       if (t.type === 'GAVE') {
         current.gave += t.amount;
-        current.net += t.amount;
       } else {
         current.got += t.amount;
-        current.net -= t.amount;
       }
+      current.netGave = current.gave - current.got;
       balances.set(t.customerId, current);
     });
     return balances;
   }, [transactions]);
 
-  // Overall totals
-  const { totalToGet, totalToGive, netTotal, toGetCount, toGiveCount } = useMemo(() => {
-    let toGet = 0;
-    let toGive = 0;
-    let getCnt = 0;
-    let giveCnt = 0;
-    customerBalances.forEach(({ net }) => {
-      if (net > 0) {
-        toGet += net;
-        getCnt++;
-      } else if (net < 0) {
-        toGive += Math.abs(net);
-        giveCnt++;
+  // Overall totals: Gave = Red, Got = Green
+  const { totalGave, totalGot, netGaveTotal, gaveCount, gotCount } = useMemo(() => {
+    let gave = 0;
+    let got = 0;
+    let gCnt = 0;
+    let rCnt = 0;
+
+    transactions.forEach((t) => {
+      if (t.type === 'GAVE') {
+        gave += t.amount;
+        gCnt++;
+      } else {
+        got += t.amount;
+        rCnt++;
       }
     });
+
     return {
-      totalToGet: toGet,
-      totalToGive: toGive,
-      netTotal: toGet - toGive,
-      toGetCount: getCnt,
-      toGiveCount: giveCnt
+      totalGave: gave,
+      totalGot: got,
+      netGaveTotal: gave - got,
+      gaveCount: gCnt,
+      gotCount: rCnt
     };
-  }, [customerBalances]);
+  }, [transactions]);
 
   // Date helpers
   const todayStr = useMemo(() => new Date().toISOString().split('T')[0], []);
@@ -113,7 +114,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     sorted.forEach((t) => {
       const cust = customerMap.get(t.customerId);
-      const custBal = customerBalances.get(t.customerId)?.net || 0;
+      const custBal = customerBalances.get(t.customerId)?.netGave || 0;
 
       if (activeFilter === 'RECOVERY' && custBal <= 0) return;
       if (activeFilter === 'PAYABLE' && custBal >= 0) return;
@@ -155,9 +156,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
       store: 'Digital Khata',
       merchantId,
       exportDate: new Date().toISOString(),
-      totalReceivable: totalToGet,
-      totalPayable: totalToGive,
-      netBalance: netTotal,
+      totalGave,
+      totalGot,
+      netDifference: totalGave - totalGot,
       customers,
       transactions
     };
@@ -331,15 +332,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {/* Executive Net Outstanding Position Card */}
           <div className="mb-3">
             <div className={`p-4 rounded-2xl border text-white shadow-xl relative overflow-hidden transition-all ${
-              netTotal > 0
-                ? 'bg-gradient-to-b from-[#0f1715] to-[#111318] border-emerald-500/30'
-                : netTotal < 0
+              netGaveTotal > 0
                 ? 'bg-gradient-to-b from-[#191012] to-[#111318] border-red-500/30'
+                : netGaveTotal < 0
+                ? 'bg-gradient-to-b from-[#0f1715] to-[#111318] border-emerald-500/30'
                 : 'bg-[#111318] border-[#27272a]'
             }`}>
               <div
                 className={`absolute -right-6 -bottom-6 w-36 h-36 rounded-full pointer-events-none blur-3xl ${
-                  netTotal >= 0 ? 'bg-emerald-500/15' : 'bg-red-500/15'
+                  netGaveTotal > 0 ? 'bg-red-500/15' : netGaveTotal < 0 ? 'bg-emerald-500/15' : 'bg-zinc-500/10'
                 }`}
               ></div>
 
@@ -347,26 +348,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="flex items-center justify-between mb-2">
                 <span className="text-[11px] tracking-wider text-zinc-400 uppercase font-bold flex items-center gap-1.5">
                   <span className="material-symbols-outlined text-[16px] text-zinc-400">account_balance_wallet</span>
-                  <span>Net Outstanding Position</span>
+                  <span>Net Ledger Position</span>
                 </span>
 
                 <span
                   className={`inline-flex items-center gap-1 text-[11px] px-2.5 py-0.5 rounded-full font-bold shadow-sm ${
-                    netTotal > 0
-                      ? 'text-emerald-400 bg-emerald-950/80 border border-emerald-800/60'
-                      : netTotal < 0
+                    netGaveTotal > 0
                       ? 'text-red-400 bg-red-950/80 border border-red-800/60'
+                      : netGaveTotal < 0
+                      ? 'text-emerald-400 bg-emerald-950/80 border border-emerald-800/60'
                       : 'text-zinc-400 bg-zinc-800 border border-zinc-700'
                   }`}
                 >
                   <span className="material-symbols-outlined text-[13px]">
-                    {netTotal > 0 ? 'trending_up' : netTotal < 0 ? 'trending_down' : 'check_circle'}
+                    {netGaveTotal > 0 ? 'trending_down' : netGaveTotal < 0 ? 'trending_up' : 'check_circle'}
                   </span>
                   <span>
-                    {netTotal > 0
-                      ? '(+) NET POSITIVE'
-                      : netTotal < 0
-                      ? '(-) NET NEGATIVE'
+                    {netGaveTotal > 0
+                      ? '(-) NET GAVE (उधार दिया)'
+                      : netGaveTotal < 0
+                      ? '(+) NET GOT (जमा / मिला)'
                       : 'BALANCED (₹0)'}
                   </span>
                 </span>
@@ -376,92 +377,92 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="flex items-baseline gap-1.5 mb-1">
                 <span
                   className={`text-2xl font-bold font-sans ${
-                    netTotal > 0 ? 'text-emerald-400' : netTotal < 0 ? 'text-red-400' : 'text-zinc-400'
+                    netGaveTotal > 0 ? 'text-red-400' : netGaveTotal < 0 ? 'text-emerald-400' : 'text-zinc-400'
                   }`}
                 >
-                  {netTotal > 0 ? '+₹' : netTotal < 0 ? '-₹' : '₹'}
+                  {netGaveTotal > 0 ? '-₹' : netGaveTotal < 0 ? '+₹' : '₹'}
                 </span>
                 <span
                   className={`text-3xl font-extrabold tracking-tight font-sans ${
-                    netTotal > 0 ? 'text-emerald-300' : netTotal < 0 ? 'text-red-300' : 'text-white'
+                    netGaveTotal > 0 ? 'text-red-400' : netGaveTotal < 0 ? 'text-emerald-400' : 'text-white'
                   }`}
                 >
-                  {Math.abs(netTotal).toLocaleString('en-IN')}
+                  {Math.abs(netGaveTotal).toLocaleString('en-IN')}
                 </span>
                 <span className="text-xs text-zinc-400 ml-1.5 font-medium">
-                  {netTotal > 0
-                    ? 'Total Positive (Receivable in your favor)'
-                    : netTotal < 0
-                    ? 'Total Negative (Payable amount you owe)'
+                  {netGaveTotal > 0
+                    ? 'Total Net Given (Udhaar out of pocket)'
+                    : netGaveTotal < 0
+                    ? 'Total Net Received (Payment Inflow)'
                     : 'Accounts Balanced'}
                 </span>
               </div>
 
               {/* Ratio Bar */}
-              {(totalToGet > 0 || totalToGive > 0) && (
+              {(totalGave > 0 || totalGot > 0) && (
                 <div className="my-2.5">
                   <div className="h-1.5 w-full bg-zinc-900 rounded-full overflow-hidden flex">
                     <div
                       style={{
                         width: `${
-                          totalToGet + totalToGive > 0
-                            ? (totalToGet / (totalToGet + totalToGive)) * 100
+                          totalGave + totalGot > 0
+                            ? (totalGave / (totalGave + totalGot)) * 100
                             : 50
                         }%`
                       }}
-                      className="bg-emerald-500 transition-all duration-500 rounded-l-full"
+                      className="bg-red-500 transition-all duration-500 rounded-l-full"
                     />
                     <div
                       style={{
                         width: `${
-                          totalToGet + totalToGive > 0
-                            ? (totalToGive / (totalToGet + totalToGive)) * 100
+                          totalGave + totalGot > 0
+                            ? (totalGot / (totalGave + totalGot)) * 100
                             : 50
                         }%`
                       }}
-                      className="bg-red-500 transition-all duration-500 rounded-r-full"
+                      className="bg-emerald-500 transition-all duration-500 rounded-r-full"
                     />
                   </div>
                   <div className="flex justify-between text-[10px] text-zinc-500 mt-1 font-mono">
-                    <span className="text-emerald-400 font-semibold">
-                      (+) Got {totalToGet + totalToGive > 0 ? Math.round((totalToGet / (totalToGet + totalToGive)) * 100) : 0}%
-                    </span>
                     <span className="text-red-400 font-semibold">
-                      (-) Gave {totalToGet + totalToGive > 0 ? Math.round((totalToGive / (totalToGet + totalToGive)) * 100) : 0}%
+                      (-) Gave {totalGave + totalGot > 0 ? Math.round((totalGave / (totalGave + totalGot)) * 100) : 0}%
+                    </span>
+                    <span className="text-emerald-400 font-semibold">
+                      (+) Got {totalGave + totalGot > 0 ? Math.round((totalGot / (totalGave + totalGot)) * 100) : 0}%
                     </span>
                   </div>
                 </div>
               )}
 
-              {/* Positive vs Negative Grid */}
+              {/* Positive vs Negative Grid: Gave = Red, Got = Green */}
               <div className="grid grid-cols-2 gap-2 bg-black/70 border border-[#27272a] rounded-xl p-2.5 mt-2">
                 <div className="flex flex-col">
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                    <span className="text-[11px] text-zinc-300 font-semibold">
-                      (+) Positive (लेना है)
+                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                    <span className="text-[11px] text-red-400 font-semibold">
+                      (-) Total GAVE (दिया)
                     </span>
                   </div>
-                  <span className="text-base font-bold text-emerald-400 font-sans tracking-tight">
-                    +₹ {totalToGet.toLocaleString('en-IN')}
+                  <span className="text-base font-bold text-red-400 font-sans tracking-tight">
+                    -₹ {totalGave.toLocaleString('en-IN')}
                   </span>
                   <span className="text-[10.5px] text-zinc-500">
-                    {toGetCount} {toGetCount === 1 ? 'account owes you' : 'accounts owe you'}
+                    {gaveCount} {gaveCount === 1 ? 'debit entry' : 'debit entries'}
                   </span>
                 </div>
 
                 <div className="flex flex-col">
                   <div className="flex items-center gap-1.5 mb-0.5">
-                    <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                    <span className="text-[11px] text-zinc-300 font-semibold">
-                      (-) Negative (देना है)
+                    <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                    <span className="text-[11px] text-emerald-400 font-semibold">
+                      (+) Total GOT (मिला)
                     </span>
                   </div>
-                  <span className="text-base font-bold text-red-400 font-sans tracking-tight">
-                    -₹ {totalToGive.toLocaleString('en-IN')}
+                  <span className="text-base font-bold text-emerald-400 font-sans tracking-tight">
+                    +₹ {totalGot.toLocaleString('en-IN')}
                   </span>
                   <span className="text-[10.5px] text-zinc-500">
-                    {toGiveCount} {toGiveCount === 1 ? 'vendor to pay' : 'vendors to pay'}
+                    {gotCount} {gotCount === 1 ? 'credit entry' : 'credit entries'}
                   </span>
                 </div>
               </div>
@@ -750,9 +751,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
               ) : (
                 filteredCustomers.map((cust) => {
-                  const bal = customerBalances.get(cust.id!) || { gave: 0, got: 0, net: 0 };
-                  const isReceivable = bal.net > 0;
-                  const isPayable = bal.net < 0;
+                  const bal = customerBalances.get(cust.id!) || { gave: 0, got: 0, netGave: 0 };
+                  const isGave = bal.netGave > 0;
+                  const isGot = bal.netGave < 0;
                   const initials = getInitials(cust.name);
 
                   return (
@@ -778,25 +779,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       <div className="flex flex-col items-end flex-shrink-0 pl-2">
                         <span
                           className={`text-sm font-bold font-sans tracking-tight ${
-                            isReceivable
-                              ? 'text-emerald-400'
-                              : isPayable
+                            isGave
                               ? 'text-red-400'
+                              : isGot
+                              ? 'text-emerald-400'
                               : 'text-zinc-400'
                           }`}
                         >
-                          ₹ {Math.abs(bal.net).toLocaleString('en-IN')}
+                          {isGave ? '-₹ ' : isGot ? '+₹ ' : '₹ '}
+                          {Math.abs(bal.netGave).toLocaleString('en-IN')}
                         </span>
                         <span
                           className={`text-[10px] font-semibold ${
-                            isReceivable
-                              ? 'text-emerald-400'
-                              : isPayable
+                            isGave
                               ? 'text-red-400'
+                              : isGot
+                              ? 'text-emerald-400'
                               : 'text-zinc-500'
                           }`}
                         >
-                          {isReceivable ? "You'll Get" : isPayable ? "You'll Give" : 'Settled'}
+                          {isGave ? 'Gave (Udhaar)' : isGot ? 'Got (Advance)' : 'Settled'}
                         </span>
                       </div>
                     </div>
