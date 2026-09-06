@@ -4,6 +4,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
+import { generateDailyDayBookPDF } from '../utils/pdfGenerator';
 
 interface DashboardProps {
   merchantId: string;
@@ -29,6 +30,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [isExportingDayPDF, setIsExportingDayPDF] = useState<string | null>(null);
+  const [selectedReportDate, setSelectedReportDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
 
   const handleForceSync = async () => {
     setIsSyncingCloud(true);
@@ -39,6 +42,28 @@ export const Dashboard: React.FC<DashboardProps> = ({
       alert(`Cloud sync error: ${e instanceof Error ? e.message : 'Please check internet and Firestore rules.'}`);
     } finally {
       setIsSyncingCloud(false);
+    }
+  };
+
+  const handleExportDayPDF = async (dateStr: string, dayTxns: Transaction[]) => {
+    try {
+      setIsExportingDayPDF(dateStr);
+      const dateLabel = getDateFormatted(dateStr);
+      const res = await generateDailyDayBookPDF(
+        dateLabel,
+        dateStr,
+        dayTxns,
+        customerMap,
+        merchantId || 'Digital Khata'
+      );
+      if (!res.success && res.message) {
+        alert(res.message);
+      }
+    } catch (err) {
+      console.error('Failed to export daily PDF', err);
+      alert('Failed to generate daily PDF report.');
+    } finally {
+      setIsExportingDayPDF(null);
     }
   };
 
@@ -104,6 +129,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
     d.setDate(d.getDate() - 1);
     return d.toISOString().split('T')[0];
   }, []);
+
+  const todayTxns = useMemo(() => {
+    return transactions.filter((t) => t.date === todayStr);
+  }, [transactions, todayStr]);
 
   // Format date headers
   const getDateFormatted = (dateStr: string) => {
@@ -360,6 +389,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </button>
 
             <div className="flex items-center gap-1.5">
+              {todayTxns.length > 0 && (
+                <button
+                  onClick={() => handleExportDayPDF(todayStr, todayTxns)}
+                  disabled={isExportingDayPDF === todayStr}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-[#18181b] border border-[#27272a] hover:border-emerald-500 text-xs font-semibold text-zinc-300 hover:text-white shadow-sm active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                  type="button"
+                  title="Export Today's Daily Ledger Statement as PDF"
+                >
+                  <span className="material-symbols-outlined text-[14px] text-emerald-400">picture_as_pdf</span>
+                  <span>{isExportingDayPDF === todayStr ? '...' : "Today's PDF"}</span>
+                </button>
+              )}
               <button
                 onClick={() => onOpenAddCustomer()}
                 className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full bg-white text-black text-xs font-bold shadow-sm active:scale-95 transition-all hover:bg-zinc-200 cursor-pointer"
@@ -659,25 +700,39 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <div key={dateStr} className="flex flex-col gap-1.5">
                       {/* Date Header */}
                       <div className="flex items-center justify-between py-1 px-1">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           <span
-                            className={`w-2 h-2 rounded-full ${
+                            className={`w-2 h-2 rounded-full flex-shrink-0 ${
                               dateStr === todayStr ? 'bg-emerald-500' : 'bg-zinc-500'
                             }`}
                           ></span>
-                          <span className="text-xs font-bold text-zinc-200">
+                          <span className="text-xs font-bold text-zinc-200 truncate">
                             {getDateFormatted(dateStr)}
                           </span>
                         </div>
-                        <span
-                          className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
-                            dayNet >= 0
-                              ? 'text-emerald-400 bg-emerald-950/70 border border-emerald-800/40'
-                              : 'text-red-400 bg-red-950/70 border border-red-800/40'
-                          }`}
-                        >
-                          Net: {dayNet >= 0 ? `+₹${dayNet.toLocaleString('en-IN')}` : `-₹${Math.abs(dayNet).toLocaleString('en-IN')}`}
-                        </span>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleExportDayPDF(dateStr, dayTxns);
+                            }}
+                            disabled={isExportingDayPDF === dateStr}
+                            className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#18181b] border border-[#27272a] hover:border-emerald-500 text-[11px] font-semibold text-zinc-300 hover:text-emerald-400 transition-all cursor-pointer shadow-sm active:scale-95 disabled:opacity-50"
+                            title={`Export PDF for ${getDateFormatted(dateStr)}`}
+                          >
+                            <span className="material-symbols-outlined text-[13px] text-emerald-400">picture_as_pdf</span>
+                            <span>{isExportingDayPDF === dateStr ? '...' : 'PDF'}</span>
+                          </button>
+                          <span
+                            className={`text-[11px] px-2 py-0.5 rounded-full font-bold ${
+                              dayNet >= 0
+                                ? 'text-emerald-400 bg-emerald-950/70 border border-emerald-800/40'
+                                : 'text-red-400 bg-red-950/70 border border-red-800/40'
+                            }`}
+                          >
+                            Net: {dayNet >= 0 ? `+₹${dayNet.toLocaleString('en-IN')}` : `-₹${Math.abs(dayNet).toLocaleString('en-IN')}`}
+                          </span>
+                        </div>
                       </div>
 
                       {/* Transaction Cards */}
@@ -880,6 +935,45 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <span className="text-[11px] text-zinc-400">Registered Parties</span>
                     <p className="text-lg font-bold text-white mt-0.5 font-sans">{customers.length}</p>
                   </div>
+                </div>
+              </div>
+
+              {/* Date-Wise Day-Book Statement PDF Generator */}
+              <div className="p-4 rounded-2xl bg-[#111318] border border-[#27272a] space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-emerald-400">picture_as_pdf</span>
+                      <span>Date-Wise Day-Book PDF Report</span>
+                    </h3>
+                    <p className="text-[11px] text-zinc-400 mt-0.5">
+                      Generate official daily ledger statement of all parties for any date
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    type="date"
+                    value={selectedReportDate}
+                    onChange={(e) => setSelectedReportDate(e.target.value)}
+                    className="flex-1 py-2 px-3 rounded-xl bg-black/60 border border-[#27272a] text-zinc-100 text-xs focus:outline-none focus:border-zinc-500"
+                  />
+                  <button
+                    onClick={() => {
+                      const txnsForDate = transactions.filter((t) => t.date === selectedReportDate);
+                      if (txnsForDate.length === 0) {
+                        alert(`No transactions found for date: ${selectedReportDate}`);
+                        return;
+                      }
+                      handleExportDayPDF(selectedReportDate, txnsForDate);
+                    }}
+                    disabled={isExportingDayPDF === selectedReportDate}
+                    className="px-3.5 py-2 rounded-xl bg-white text-black font-bold text-xs flex items-center gap-1.5 hover:bg-zinc-200 transition-colors shadow-sm cursor-pointer disabled:opacity-50 flex-shrink-0"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">download</span>
+                    <span>{isExportingDayPDF === selectedReportDate ? 'Exporting...' : 'Export Daily PDF'}</span>
+                  </button>
                 </div>
               </div>
 

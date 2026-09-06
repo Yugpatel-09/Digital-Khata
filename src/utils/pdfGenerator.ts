@@ -256,3 +256,239 @@ export async function generateCustomerStatementPDF(
     return { success: false, message: error?.message || 'Error creating PDF' };
   }
 }
+
+/**
+ * Generate Date-wise Daily Day-Book PDF Report for all customers/transactions on that date
+ */
+export async function generateDailyDayBookPDF(
+  dateLabel: string,
+  dateStr: string,
+  transactions: Transaction[],
+  customerMap: Map<number, Customer>,
+  merchantName: string = 'Digital Khata'
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+
+    // Sort ascending by time / createdAt
+    const sortedTxns = [...transactions].sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    );
+
+    let totalGave = 0;
+    let totalGot = 0;
+    const uniqueParties = new Set<number>();
+
+    const tableData = sortedTxns.map((t, index) => {
+      uniqueParties.add(t.customerId);
+      const isGave = t.type === 'GAVE';
+      if (isGave) {
+        totalGave += t.amount;
+      } else {
+        totalGot += t.amount;
+      }
+
+      const custName = customerMap.get(t.customerId)?.name || `Party #${t.customerId}`;
+
+      return [
+        (index + 1).toString(),
+        t.time || '-',
+        custName,
+        t.notes || (isGave ? 'Given (Udhaar)' : 'Received (Jama)'),
+        t.paymentMode || 'Cash',
+        isGave ? `Rs. ${t.amount.toLocaleString('en-IN')}` : '-',
+        !isGave ? `Rs. ${t.amount.toLocaleString('en-IN')}` : '-'
+      ];
+    });
+
+    const netDifference = totalGave - totalGot;
+
+    // Header Background Banner
+    doc.setFillColor(17, 19, 24);
+    doc.rect(0, 0, pageWidth, 38, 'F');
+
+    // Top Accent Line (Emerald)
+    doc.setFillColor(16, 185, 129);
+    doc.rect(0, 0, pageWidth, 2.5, 'F');
+
+    // Brand Header
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text(merchantName.toUpperCase(), 14, 16);
+
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(161, 161, 170);
+    doc.text('DAILY LEDGER DAY-BOOK STATEMENT', 14, 22);
+    doc.text(
+      `Date: ${dateLabel} (${dateStr}) • Generated: ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
+      14,
+      28
+    );
+
+    // Status Badge in Header
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    if (netDifference > 0) {
+      doc.setFillColor(69, 10, 10); // Red dark
+      doc.roundedRect(pageWidth - 65, 10, 51, 18, 2, 2, 'F');
+      doc.setTextColor(248, 113, 113); // Red light
+      doc.text('(-) NET GAVE TODAY', pageWidth - 60, 17);
+      doc.text(`Rs. ${netDifference.toLocaleString('en-IN')}`, pageWidth - 60, 24);
+    } else if (netDifference < 0) {
+      doc.setFillColor(5, 46, 22); // Emerald dark
+      doc.roundedRect(pageWidth - 65, 10, 51, 18, 2, 2, 'F');
+      doc.setTextColor(52, 211, 153); // Emerald light
+      doc.text('(+) NET GOT TODAY', pageWidth - 60, 17);
+      doc.text(`Rs. ${Math.abs(netDifference).toLocaleString('en-IN')}`, pageWidth - 60, 24);
+    } else {
+      doc.setFillColor(39, 39, 42);
+      doc.roundedRect(pageWidth - 65, 10, 51, 18, 2, 2, 'F');
+      doc.setTextColor(212, 212, 216);
+      doc.text('DAY BALANCED', pageWidth - 60, 17);
+      doc.text('Rs. 0.00', pageWidth - 60, 24);
+    }
+
+    // Daily Summary Stats Cards
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(226, 232, 240);
+    doc.roundedRect(14, 44, pageWidth - 28, 26, 2, 2, 'FD');
+
+    // Stat 1: Total Parties
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text('TOTAL PARTIES', 20, 52);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(15, 23, 42);
+    doc.text(`${uniqueParties.size} Parties (${sortedTxns.length} entries)`, 20, 62);
+
+    // Stat 2: Total Given
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text('(-) TOTAL GIVEN (UDHAAR)', pageWidth / 2 - 25, 52);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(225, 29, 72);
+    doc.text(`Rs. ${totalGave.toLocaleString('en-IN')}`, pageWidth / 2 - 25, 62);
+
+    // Stat 3: Total Received
+    doc.setFontSize(8.5);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(100, 116, 139);
+    doc.text('(+) TOTAL RECEIVED (JAMA)', pageWidth - 70, 52);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(5, 150, 105);
+    doc.text(`Rs. ${totalGot.toLocaleString('en-IN')}`, pageWidth - 70, 62);
+
+    // Table of Transactions
+    autoTable(doc, {
+      startY: 76,
+      head: [['#', 'Time', 'Party / Customer Name', 'Particulars / Description', 'Mode', 'You Gave (Dr)', 'You Got (Cr)']],
+      body: tableData,
+      foot: [[
+        '',
+        'Total',
+        `${uniqueParties.size} Parties`,
+        `${sortedTxns.length} Transaction(s)`,
+        '',
+        `Rs. ${totalGave.toLocaleString('en-IN')}`,
+        `Rs. ${totalGot.toLocaleString('en-IN')}`
+      ]],
+      theme: 'grid',
+      headStyles: {
+        fillColor: [17, 19, 24],
+        textColor: [255, 255, 255],
+        fontSize: 9,
+        fontStyle: 'bold',
+        halign: 'left'
+      },
+      footStyles: {
+        fillColor: [241, 245, 249],
+        textColor: [15, 23, 42],
+        fontSize: 9,
+        fontStyle: 'bold'
+      },
+      styles: {
+        fontSize: 8.5,
+        cellPadding: 3,
+        textColor: [30, 41, 59],
+        lineColor: [226, 232, 240],
+        lineWidth: 0.2
+      },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 20 },
+        2: { cellWidth: 42, fontStyle: 'bold' },
+        3: { cellWidth: 'auto' },
+        4: { cellWidth: 18 },
+        5: { cellWidth: 28, halign: 'right', textColor: [225, 29, 72], fontStyle: 'bold' },
+        6: { cellWidth: 28, halign: 'right', textColor: [5, 150, 105], fontStyle: 'bold' }
+      },
+      alternateRowStyles: {
+        fillColor: [248, 250, 252]
+      },
+      margin: { left: 14, right: 14 }
+    });
+
+    // Footer / Signature Section
+    const finalY = (doc as any).lastAutoTable?.finalY ? (doc as any).lastAutoTable.finalY + 12 : 200;
+
+    if (finalY < pageHeight - 35) {
+      doc.setDrawColor(203, 213, 225);
+      doc.line(pageWidth - 65, finalY + 14, pageWidth - 14, finalY + 14);
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text('Authorized Signature / Stamp', pageWidth - 40, finalY + 19, { align: 'center' });
+    }
+
+    // Bottom Notice
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    doc.text(
+      'This is a computer-generated daily day-book statement issued by Digital Khata Enterprise.',
+      pageWidth / 2,
+      pageHeight - 8,
+      { align: 'center' }
+    );
+
+    const fileName = `Daily_Report_${dateStr}_${merchantName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+
+    if (Capacitor.isNativePlatform()) {
+      const dataUri = doc.output('datauristring');
+      const base64Data = dataUri.split(',')[1];
+
+      const savedFile = await Filesystem.writeFile({
+        path: fileName,
+        data: base64Data,
+        directory: Directory.Cache
+      });
+
+      await Share.share({
+        title: `Daily Report - ${dateLabel}`,
+        text: `Digital Khata Daily Ledger Statement for ${dateLabel}`,
+        url: savedFile.uri,
+        dialogTitle: 'Save or Share Daily PDF Report'
+      });
+      return { success: true };
+    } else {
+      doc.save(fileName);
+      return { success: true };
+    }
+  } catch (error: any) {
+    console.error('Failed to generate daily day-book PDF', error);
+    return { success: false, message: error?.message || 'Error creating PDF' };
+  }
+}
+
