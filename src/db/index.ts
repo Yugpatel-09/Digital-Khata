@@ -3,8 +3,11 @@ import {
   syncCustomerToCloud,
   deleteCustomerFromCloud,
   syncTransactionToCloud,
-  deleteTransactionFromCloud
+  deleteTransactionFromCloud,
+  forceFullSync
 } from './firebase';
+
+export { forceFullSync };
 
 export interface Customer {
   id?: number;
@@ -40,6 +43,10 @@ export class KhataDatabase extends Dexie {
   constructor() {
     super('KhataEnterpriseDB_Real');
     this.version(1).stores({
+      customers: '++id, name, phone, createdAt',
+      transactions: '++id, customerId, type, date, createdAt'
+    });
+    this.version(2).stores({
       customers: 'id, name, phone, createdAt',
       transactions: 'id, customerId, type, date, createdAt'
     });

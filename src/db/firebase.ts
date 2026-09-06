@@ -6,6 +6,7 @@ import {
   setDoc,
   deleteDoc,
   onSnapshot,
+  getDocs,
   type Unsubscribe
 } from 'firebase/firestore';
 import { db, type Customer, type Transaction } from './index';
@@ -32,6 +33,16 @@ export function getMerchantSlug(merchantId: string): string {
   return cleaned || 'default_enterprise_khata';
 }
 
+function cleanData<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const clean: Record<string, any> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) {
+      clean[k] = v;
+    }
+  }
+  return clean;
+}
+
 /**
  * Save / sync customer to cloud Firestore
  */
@@ -40,13 +51,14 @@ export async function syncCustomerToCloud(merchantId: string, customer: Customer
   try {
     const slug = getMerchantSlug(merchantId);
     const docRef = doc(firestore, 'merchants', slug, 'customers', customer.id.toString());
-    await setDoc(docRef, {
+    const data = cleanData({
       ...customer,
       merchantId,
       syncedAt: new Date().toISOString()
-    }, { merge: true });
+    });
+    await setDoc(docRef, data, { merge: true });
   } catch (err) {
-    console.warn('Firestore syncCustomerToCloud error (offline mode):', err);
+    console.warn('Firestore syncCustomerToCloud error:', err);
   }
 }
 
@@ -72,13 +84,14 @@ export async function syncTransactionToCloud(merchantId: string, transaction: Tr
   try {
     const slug = getMerchantSlug(merchantId);
     const docRef = doc(firestore, 'merchants', slug, 'transactions', transaction.id.toString());
-    await setDoc(docRef, {
+    const data = cleanData({
       ...transaction,
       merchantId,
       syncedAt: new Date().toISOString()
-    }, { merge: true });
+    });
+    await setDoc(docRef, data, { merge: true });
   } catch (err) {
-    console.warn('Firestore syncTransactionToCloud error (offline mode):', err);
+    console.warn('Firestore syncTransactionToCloud error:', err);
   }
 }
 
@@ -97,8 +110,71 @@ export async function deleteTransactionFromCloud(merchantId: string, transaction
 }
 
 /**
+ * Force manual bidirectional full sync
+ */
+export async function forceFullSync(merchantId: string): Promise<{ customers: number; transactions: number }> {
+  if (!merchantId) return { customers: 0, transactions: 0 };
+  const slug = getMerchantSlug(merchantId);
+
+  // 1. Push all local records to cloud
+  const localCustomers = await db.customers.toArray();
+  const localTransactions = await db.transactions.toArray();
+
+  for (const c of localCustomers) {
+    if (c.id) {
+      await syncCustomerToCloud(merchantId, c);
+    }
+  }
+
+  for (const t of localTransactions) {
+    if (t.id) {
+      await syncTransactionToCloud(merchantId, t);
+    }
+  }
+
+  // 2. Fetch all cloud records down to local Dexie
+  const custSnap = await getDocs(collection(firestore, 'merchants', slug, 'customers'));
+  for (const docSnap of custSnap.docs) {
+    const data = docSnap.data() as Customer;
+    const id = Number(data.id || docSnap.id);
+    const item: Customer = {
+      id,
+      name: data.name || '',
+      phone: data.phone || '',
+      createdAt: data.createdAt || new Date().toISOString(),
+      updatedAt: data.updatedAt || new Date().toISOString()
+    };
+    if (data.email) item.email = data.email;
+    if (data.address) item.address = data.address;
+    if (data.notes) item.notes = data.notes;
+    await db.customers.put(item);
+  }
+
+  const txnSnap = await getDocs(collection(firestore, 'merchants', slug, 'transactions'));
+  for (const docSnap of txnSnap.docs) {
+    const data = docSnap.data() as Transaction;
+    const id = Number(data.id || docSnap.id);
+    const item: Transaction = {
+      id,
+      customerId: Number(data.customerId),
+      type: data.type || 'GAVE',
+      amount: Number(data.amount) || 0,
+      date: data.date || new Date().toISOString().split('T')[0],
+      time: data.time || '',
+      paymentMode: data.paymentMode || 'UPI',
+      createdAt: data.createdAt || new Date().toISOString()
+    };
+    if (data.notes) item.notes = data.notes;
+    if (data.statusNote) item.statusNote = data.statusNote;
+    if (data.billImage) item.billImage = data.billImage;
+    await db.transactions.put(item);
+  }
+
+  return { customers: custSnap.size, transactions: txnSnap.size };
+}
+
+/**
  * Start real-time 2-way sync with Firestore.
- * Listens to remote changes on all devices logged into the same merchant.
  */
 let unsubscribeCustomers: Unsubscribe | null = null;
 let unsubscribeTransactions: Unsubscribe | null = null;
@@ -109,7 +185,6 @@ export function startRealtimeCloudSync(
 ): () => void {
   if (!merchantId) return () => {};
 
-  // Clean up previous listeners if any
   if (unsubscribeCustomers) {
     unsubscribeCustomers();
     unsubscribeCustomers = null;
@@ -122,29 +197,13 @@ export function startRealtimeCloudSync(
   const slug = getMerchantSlug(merchantId);
   onStatusChange?.('syncing');
 
-  // Initial one-time sync of any local records that aren't yet in the cloud
-  (async () => {
-    try {
-      const localCustomers = await db.customers.toArray();
-      const localTransactions = await db.transactions.toArray();
-
-      for (const c of localCustomers) {
-        if (c.id) {
-          const docRef = doc(firestore, 'merchants', slug, 'customers', c.id.toString());
-          await setDoc(docRef, { ...c, merchantId }, { merge: true });
-        }
-      }
-
-      for (const t of localTransactions) {
-        if (t.id) {
-          const docRef = doc(firestore, 'merchants', slug, 'transactions', t.id.toString());
-          await setDoc(docRef, { ...t, merchantId }, { merge: true });
-        }
-      }
-    } catch (e) {
-      console.warn('Initial local-to-cloud sync warning:', e);
-    }
-  })();
+  // Trigger initial full sync
+  forceFullSync(merchantId)
+    .then(() => onStatusChange?.('connected'))
+    .catch((err) => {
+      console.warn('Initial full sync failed:', err);
+      onStatusChange?.('offline');
+    });
 
   // 1. Real-time Customers Listener
   const customersColl = collection(firestore, 'merchants', slug, 'customers');
@@ -157,14 +216,14 @@ export function startRealtimeCloudSync(
         const id = Number(data.id || change.doc.id);
         const item: Customer = {
           id,
-          name: data.name,
-          phone: data.phone,
-          email: data.email,
-          address: data.address,
-          notes: data.notes,
+          name: data.name || '',
+          phone: data.phone || '',
           createdAt: data.createdAt || new Date().toISOString(),
           updatedAt: data.updatedAt || new Date().toISOString()
         };
+        if (data.email) item.email = data.email;
+        if (data.address) item.address = data.address;
+        if (data.notes) item.notes = data.notes;
 
         if (change.type === 'added' || change.type === 'modified') {
           await db.customers.put(item);
@@ -191,16 +250,16 @@ export function startRealtimeCloudSync(
         const item: Transaction = {
           id,
           customerId: Number(data.customerId),
-          type: data.type,
-          amount: Number(data.amount),
-          date: data.date,
+          type: data.type || 'GAVE',
+          amount: Number(data.amount) || 0,
+          date: data.date || new Date().toISOString().split('T')[0],
           time: data.time || '',
           paymentMode: data.paymentMode || 'UPI',
-          notes: data.notes,
-          statusNote: data.statusNote,
-          billImage: data.billImage,
           createdAt: data.createdAt || new Date().toISOString()
         };
+        if (data.notes) item.notes = data.notes;
+        if (data.statusNote) item.statusNote = data.statusNote;
+        if (data.billImage) item.billImage = data.billImage;
 
         if (change.type === 'added' || change.type === 'modified') {
           await db.transactions.put(item);

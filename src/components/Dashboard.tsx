@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { db, restoreDatabaseFromJSON, type Customer, type Transaction, type TransactionType } from '../db';
+import { db, restoreDatabaseFromJSON, forceFullSync, type Customer, type Transaction, type TransactionType } from '../db';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory, Encoding } from '@capacitor/filesystem';
@@ -28,6 +28,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'RECOVERY' | 'SETTLED' | 'PAYABLE'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+
+  const handleForceSync = async () => {
+    setIsSyncingCloud(true);
+    try {
+      const res = await forceFullSync(merchantId);
+      alert(`Cloud sync complete!\nStore Account: "${merchantId}"\nSynced: ${res.customers} parties, ${res.transactions} transactions.`);
+    } catch (e) {
+      alert(`Cloud sync error: ${e instanceof Error ? e.message : 'Please check internet and Firestore rules.'}`);
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  };
 
   // Fetch all customers & transactions reactively
   const customers = useLiveQuery(() => db.customers.toArray()) || [];
@@ -280,6 +293,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <p className="text-xs font-bold text-white truncate">{merchantId}</p>
                     <p className="text-[10px] text-emerald-400 font-semibold uppercase tracking-wide">Enterprise Merchant</p>
                   </div>
+                  <button
+                    onClick={() => {
+                      setShowProfileMenu(false);
+                      handleForceSync();
+                    }}
+                    disabled={isSyncingCloud}
+                    className="w-full px-3.5 py-2 text-left text-xs text-zinc-200 hover:bg-zinc-800 flex items-center gap-2 cursor-pointer"
+                  >
+                    <span className={`material-symbols-outlined text-[16px] text-sky-400 ${isSyncingCloud ? 'animate-spin' : ''}`}>sync</span>
+                    <span>{isSyncingCloud ? 'Syncing Cloud...' : 'Sync with Cloud Now'}</span>
+                  </button>
                   <button
                     onClick={() => {
                       setShowProfileMenu(false);
