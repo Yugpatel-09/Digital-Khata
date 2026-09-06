@@ -8,7 +8,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [merchantId, setMerchantId] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(true);
   const [lang, setLang] = useState<'EN' | 'HI'>('EN');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -146,19 +145,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 </div>
               </div>
 
-              {/* Remember Me & Forgot Password */}
-              <div className="flex items-center justify-between pt-0.5 text-[12.5px]">
-                <label className="flex items-center gap-2 cursor-pointer select-none group">
-                  <input
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="w-4 h-4 rounded bg-zinc-900 border border-zinc-700 text-zinc-200 focus:ring-0 cursor-pointer accent-white"
-                    type="checkbox"
-                  />
-                  <span className="text-zinc-400 group-hover:text-zinc-200 transition-colors text-[12px] font-normal">
-                    Remember this device
-                  </span>
-                </label>
+              {/* Help Information */}
+              <div className="flex items-center justify-end pt-0.5 text-[12.5px]">
                 <a
                   className="text-zinc-400 hover:text-white text-[12px] font-medium transition-colors cursor-pointer"
                   href="#info"
