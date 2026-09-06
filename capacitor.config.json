@@ -1,0 +1,10 @@
+{
+  "appId": "com.digitalkhata.app",
+  "appName": "Digital Khata",
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "android": {
+    "backgroundColor": "#000000",
+    "allowMixedContent": true
+  }
+}

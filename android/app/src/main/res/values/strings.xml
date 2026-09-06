@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Digital Khata</string>
+    <string name="title_activity_main">Digital Khata</string>
+    <string name="package_name">com.digitalkhata.app</string>
+    <string name="custom_url_scheme">com.digitalkhata.app</string>
+</resources>
