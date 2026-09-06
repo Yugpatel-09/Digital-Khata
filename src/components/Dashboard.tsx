@@ -32,6 +32,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [isExportingDayPDF, setIsExportingDayPDF] = useState<string | null>(null);
   const [selectedReportDate, setSelectedReportDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [dateFilterMode, setDateFilterMode] = useState<'ALL' | 'TODAY' | 'YESTERDAY' | 'CUSTOM'>('ALL');
+  const [customDate, setCustomDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
+  const [dateSortOrder, setDateSortOrder] = useState<'DESC' | 'ASC'>('DESC');
 
   const handleForceSync = async () => {
     setIsSyncingCloud(true);
@@ -148,23 +151,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return `${dayName}, ${formatted}`;
   };
 
-  // Group transactions by date
+  // Group transactions by date with explicit date sorting & filtering
   const groupedTransactions = useMemo(() => {
     const groups: { [date: string]: Transaction[] } = {};
-    
-    const sorted = [...transactions].sort((a, b) => {
-      const timeA = new Date(a.createdAt).getTime();
-      const timeB = new Date(b.createdAt).getTime();
-      return timeB - timeA;
-    });
 
-    sorted.forEach((t) => {
+    transactions.forEach((t) => {
       const cust = customerMap.get(t.customerId);
       const custBal = customerBalances.get(t.customerId)?.netGave || 0;
 
       if (activeFilter === 'RECOVERY' && custBal <= 0) return;
       if (activeFilter === 'PAYABLE' && custBal >= 0) return;
       if (activeFilter === 'SETTLED' && t.date !== todayStr) return;
+
+      // Date Filtering: ALL, TODAY, YESTERDAY, CUSTOM
+      if (dateFilterMode === 'TODAY' && t.date !== todayStr) return;
+      if (dateFilterMode === 'YESTERDAY' && t.date !== yesterdayStr) return;
+      if (dateFilterMode === 'CUSTOM' && t.date !== customDate) return;
 
       if (
         searchQuery &&
@@ -182,8 +184,32 @@ export const Dashboard: React.FC<DashboardProps> = ({
       groups[t.date].push(t);
     });
 
-    return groups;
-  }, [transactions, customerMap, customerBalances, activeFilter, searchQuery, todayStr]);
+    // Sort transactions within each date group by createdAt descending
+    Object.keys(groups).forEach((d) => {
+      groups[d].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    });
+
+    // Sort the date groups by Date string
+    const entries = Object.entries(groups);
+    entries.sort(([dateA], [dateB]) => {
+      return dateSortOrder === 'DESC'
+        ? dateB.localeCompare(dateA)
+        : dateA.localeCompare(dateB);
+    });
+
+    return entries;
+  }, [
+    transactions,
+    customerMap,
+    customerBalances,
+    activeFilter,
+    dateFilterMode,
+    customDate,
+    dateSortOrder,
+    searchQuery,
+    todayStr,
+    yesterdayStr
+  ]);
 
   // Filtered customer list for Customers tab
   const filteredCustomers = useMemo(() => {
@@ -377,15 +403,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
           {/* Sub-Header: Date / Quick Add */}
           <div className="py-2.5 flex items-center justify-between">
             <button
-              onClick={() => setActiveFilter('ALL')}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#18181b] border border-[#27272a] text-zinc-200 text-xs font-semibold shadow-sm active:scale-95 transition-transform cursor-pointer"
+              onClick={() => setDateFilterMode(d => d === 'TODAY' ? 'ALL' : 'TODAY')}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs font-semibold shadow-sm active:scale-95 transition-all cursor-pointer ${
+                dateFilterMode === 'TODAY'
+                  ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-300'
+                  : dateFilterMode === 'YESTERDAY'
+                  ? 'bg-amber-500/20 border-amber-500/50 text-amber-300'
+                  : dateFilterMode === 'CUSTOM'
+                  ? 'bg-sky-500/20 border-sky-500/50 text-sky-300'
+                  : 'bg-[#18181b] border-[#27272a] text-zinc-200 hover:text-white'
+              }`}
               type="button"
             >
-              <span className="material-symbols-outlined text-[16px] text-zinc-400">calendar_today</span>
+              <span className="material-symbols-outlined text-[16px]">calendar_today</span>
               <span>
-                Today, {new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {dateFilterMode === 'TODAY'
+                  ? `Today (${todayTxns.length})`
+                  : dateFilterMode === 'YESTERDAY'
+                  ? 'Yesterday'
+                  : dateFilterMode === 'CUSTOM'
+                  ? customDate
+                  : 'All Dates'}
               </span>
-              <span className="material-symbols-outlined text-[16px] text-zinc-400">keyboard_arrow_down</span>
+              <span className="material-symbols-outlined text-[16px] text-zinc-400">
+                {dateFilterMode === 'ALL' ? 'unfold_more' : 'close'}
+              </span>
             </button>
 
             <div className="flex items-center gap-1.5">
@@ -576,25 +618,109 @@ export const Dashboard: React.FC<DashboardProps> = ({
             </div>
           </div>
 
-          {/* Filter Chips */}
+          {/* Date & Status Filtering Controls */}
           {transactions.length > 0 && (
-            <div className="mb-3">
-              <div className="flex items-center gap-2 overflow-x-auto py-1 no-scrollbar">
+            <div className="mb-3 space-y-2">
+              {/* Date Filters & Sort Order */}
+              <div className="flex items-center justify-between gap-1 overflow-x-auto no-scrollbar py-0.5">
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setDateFilterMode('ALL')}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                      dateFilterMode === 'ALL'
+                        ? 'bg-emerald-500 text-black font-bold shadow-sm'
+                        : 'bg-[#18181b] border border-[#27272a] text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    All Dates
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDateFilterMode('TODAY')}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                      dateFilterMode === 'TODAY'
+                        ? 'bg-emerald-500 text-black font-bold shadow-sm'
+                        : 'bg-[#18181b] border border-[#27272a] text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    Today
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDateFilterMode('YESTERDAY')}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                      dateFilterMode === 'YESTERDAY'
+                        ? 'bg-emerald-500 text-black font-bold shadow-sm'
+                        : 'bg-[#18181b] border border-[#27272a] text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    Yesterday
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDateFilterMode('CUSTOM')}
+                    className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                      dateFilterMode === 'CUSTOM'
+                        ? 'bg-emerald-500 text-black font-bold shadow-sm'
+                        : 'bg-[#18181b] border border-[#27272a] text-zinc-300 hover:text-white'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[13px]">calendar_month</span>
+                    <span>Pick Date</span>
+                  </button>
+                </div>
+
+                {/* Sort Order Toggle */}
+                <button
+                  type="button"
+                  onClick={() => setDateSortOrder((prev) => (prev === 'DESC' ? 'ASC' : 'DESC'))}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-[#18181b] border border-[#27272a] hover:border-zinc-500 text-zinc-300 hover:text-white text-[11px] font-semibold flex-shrink-0 transition-colors cursor-pointer"
+                  title="Toggle Newest / Oldest Date Sorting"
+                >
+                  <span className="material-symbols-outlined text-[14px] text-emerald-400">
+                    {dateSortOrder === 'DESC' ? 'arrow_downward' : 'arrow_upward'}
+                  </span>
+                  <span>{dateSortOrder === 'DESC' ? 'Newest' : 'Oldest'}</span>
+                </button>
+              </div>
+
+              {/* Custom Date Picker (when Pick Date is active) */}
+              {dateFilterMode === 'CUSTOM' && (
+                <div className="flex items-center justify-between gap-2 p-2 rounded-xl bg-[#18181b] border border-emerald-500/40 animate-fadeIn">
+                  <div className="flex items-center gap-2 flex-1">
+                    <span className="material-symbols-outlined text-emerald-400 text-[18px]">event</span>
+                    <span className="text-xs text-zinc-300 font-medium">Select Date:</span>
+                    <input
+                      type="date"
+                      value={customDate}
+                      onChange={(e) => setCustomDate(e.target.value)}
+                      className="py-1 px-2.5 rounded-lg bg-black/70 border border-[#27272a] text-zinc-100 text-xs focus:outline-none focus:border-emerald-500"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Status Filter Chips */}
+              <div className="flex items-center gap-2 overflow-x-auto py-0.5 no-scrollbar">
                 <button
                   onClick={() => setActiveFilter('ALL')}
-                  className={`px-3 py-1 rounded-full text-xs flex-shrink-0 font-bold shadow-sm transition-all cursor-pointer ${
+                  className={`px-3 py-0.5 rounded-full text-xs flex-shrink-0 font-bold shadow-sm transition-all cursor-pointer ${
                     activeFilter === 'ALL'
                       ? 'bg-zinc-100 text-black'
                       : 'bg-[#18181b] border border-[#27272a] text-zinc-300 hover:bg-zinc-800'
                   }`}
                   type="button"
                 >
-                  All ({transactions.length})
+                  All Status ({transactions.length})
                 </button>
 
                 <button
                   onClick={() => setActiveFilter('RECOVERY')}
-                  className={`px-3 py-1 rounded-full border text-xs flex-shrink-0 transition-colors cursor-pointer ${
+                  className={`px-3 py-0.5 rounded-full border text-xs flex-shrink-0 transition-colors cursor-pointer ${
                     activeFilter === 'RECOVERY'
                       ? 'bg-zinc-100 text-black border-zinc-100 font-bold'
                       : 'bg-[#18181b] border-[#27272a] text-zinc-300 hover:bg-zinc-800'
@@ -606,7 +732,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                 <button
                   onClick={() => setActiveFilter('PAYABLE')}
-                  className={`px-3 py-1 rounded-full border text-xs flex-shrink-0 transition-colors cursor-pointer ${
+                  className={`px-3 py-0.5 rounded-full border text-xs flex-shrink-0 transition-colors cursor-pointer ${
                     activeFilter === 'PAYABLE'
                       ? 'bg-zinc-100 text-black border-zinc-100 font-bold'
                       : 'bg-[#18181b] border-[#27272a] text-zinc-300 hover:bg-zinc-800'
@@ -672,22 +798,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                   </div>
                 </div>
-              ) : Object.keys(groupedTransactions).length === 0 ? (
+              ) : groupedTransactions.length === 0 ? (
                 <div className="py-12 text-center border border-[#27272a] rounded-2xl bg-[#121215]">
                   <span className="material-symbols-outlined text-3xl text-zinc-600 mb-1">event_busy</span>
-                  <p className="text-xs text-zinc-400">No transactions match your search.</p>
+                  <p className="text-xs text-zinc-400">No transactions match your selected date or search filter.</p>
                   <button
                     onClick={() => {
                       setActiveFilter('ALL');
+                      setDateFilterMode('ALL');
                       setSearchQuery('');
                     }}
-                    className="mt-3 px-3 py-1.5 rounded-full bg-zinc-800 text-xs font-semibold text-zinc-200 cursor-pointer"
+                    className="mt-3 px-3 py-1.5 rounded-full bg-zinc-800 text-xs font-semibold text-zinc-200 cursor-pointer hover:bg-zinc-700"
                   >
-                    Reset Filter
+                    Reset All Filters
                   </button>
                 </div>
               ) : (
-                Object.entries(groupedTransactions).map(([dateStr, dayTxns]) => {
+                groupedTransactions.map(([dateStr, dayTxns]) => {
                   const dayGave = dayTxns
                     .filter((t) => t.type === 'GAVE')
                     .reduce((s, t) => s + t.amount, 0);

@@ -98,7 +98,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     setIsSubmitting(true);
     try {
       const now = new Date();
-      const statusNote = isGave ? 'Due to you' : (paymentMode === 'UPI' ? 'Verified UPI' : 'Cash in drawer');
+      const statusNote = isGave ? 'Due to you' : 'Cash received';
 
       if (initialData?.id) {
         // UPDATE existing transaction synced with cloud
@@ -300,27 +300,6 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
                 onChange={(e) => setTime(e.target.value)}
                 className="w-full py-2 px-2.5 rounded-xl bg-black/60 border border-[#27272a] text-zinc-100 text-xs focus:outline-none focus:border-zinc-500"
               />
-            </div>
-          </div>
-
-          {/* Payment Mode */}
-          <div>
-            <label className="block text-[11px] font-medium text-zinc-300 mb-1">Payment Mode</label>
-            <div className="grid grid-cols-4 gap-1.5">
-              {(['Cash', 'UPI', 'Bank Transfer', 'Cheque'] as const).map((mode) => (
-                <button
-                  key={mode}
-                  type="button"
-                  onClick={() => setPaymentMode(mode)}
-                  className={`py-1.5 px-1 rounded-lg text-[11px] font-medium border text-center transition-all cursor-pointer ${
-                    paymentMode === mode
-                      ? 'bg-zinc-100 text-zinc-950 border-white font-bold shadow-sm'
-                      : 'bg-black/60 border-[#27272a] text-zinc-400 hover:text-zinc-200'
-                  }`}
-                >
-                  {mode}
-                </button>
-              ))}
             </div>
           </div>
 
