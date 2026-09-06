@@ -73,7 +73,7 @@ export async function generateCustomerStatementPDF(
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(161, 161, 170);
-    doc.text('OFFICIAL CUSTOMER LEDGER STATEMENT', 14, 22);
+    doc.text('LEDGER STATEMENT', 14, 22);
     doc.text(
       `Generated: ${new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} at ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
       14,
